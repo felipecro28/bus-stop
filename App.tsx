@@ -1,15 +1,15 @@
 import {
   Button,
   StyleSheet,
-  Text,
   View,
   Alert,
   ActivityIndicator,
+  Image,
 } from "react-native";
-import MapView from "react-native-maps";
+import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
 import { useEffect, useState } from "react";
-import { LocationObject } from "expo-location";
+import { getBusStop, IBusResponse } from "./services/api";
 
 export default function App() {
   const [location, setLocation] = useState<Location.LocationObject>(
@@ -17,6 +17,8 @@ export default function App() {
   );
   const [accessDenied, setAccessDenied] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
+  const [busStops, setBusStops] = useState<IBusResponse>();
+  const [turnOn, setTurnOn] = useState<boolean>(true);
 
   const getUserLocation: () => void = async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
@@ -31,6 +33,18 @@ export default function App() {
     const locationResponse = await Location.getCurrentPositionAsync({});
     setLocation(locationResponse);
     setLoading(false);
+  };
+
+  const fetchBusStopData = async () => {
+    const { latitude, longitude } = location.coords;
+    getBusStop(latitude, longitude)
+      .then(({ data }) => setBusStops(data))
+      .catch(() =>
+        Alert.alert(
+          "Erro!",
+          "Não foi possível obter as informações sobre os pontos de ônibus no momento. Tente novamente mais tarde!"
+        )
+      );
   };
 
   useEffect(() => {
@@ -48,9 +62,46 @@ export default function App() {
         }}
         mapType="mutedStandard"
         style={styles.map}
-      />
+        minZoomLevel={16}
+      >
+        <Marker
+          coordinate={{
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          }}
+          title="Você está aqui! :)"
+        >
+          <Image
+            source={require("./assets/home-pin.png")}
+            style={{ width: 40, height: 40 }}
+          />
+        </Marker>
+        {busStops?.results?.map((stop) => (
+          <Marker
+            key={stop.poi.name}
+            coordinate={{
+              latitude: stop.position.lat,
+              longitude: stop.position.lon,
+            }}
+            title={stop.poi.name}
+            description={stop.address.freeformAddress}
+          >
+            <Image
+              source={require("./assets/google-maps-bus-icon-15.png")}
+              style={{ width: 40, height: 40 }}
+            />
+          </Marker>
+        ))}
+      </MapView>
       <View style={styles.searchButton}>
-        <Button color="#de3f00fd" title="Pesquisar" />
+        <Button
+          onPress={() => {
+            turnOn ? fetchBusStopData() : setBusStops({} as IBusResponse);
+            setTurnOn(!turnOn);
+          }}
+          color="#de3f00fd"
+          title={turnOn ? "Pesquisar" : "Limpar Busca"}
+        />
       </View>
     </View>
   ) : (
